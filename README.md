@@ -12,6 +12,7 @@ A self-hosted Content Management System for your videos. 🎞️
 ## Features ✨
 
 - **🔗 Public Video Links:** Videos are public by default through unlisted UUID links; anyone with a link can watch without an account.
+- **📍 Video Chapters:** Owners can mark a lecture or course recording with titled chapters; every public link shows the same ordered list and clicking a chapter seeks the player to that point.
 - **🏠 Self-host:** Host VideoCMS using Docker on your own hardware.
 - **✍️ Pretty Subtitles:** Subtitles are stored as softsubs in the ASS format to preserve styling and save storage.
 - **⚡ HLS Multi-Quality:** Videos are converted into multiple qualities to ensure smooth playback for different connection speeds.
@@ -49,6 +50,20 @@ CAPTCHA requires an enabled, configured server provider. Guest uploads use the s
 The default deployment serves the share page, API and player from the same origin. A separate frontend on the same site can use `NUXT_PUBLIC_API_URL` and `NUXT_PUBLIC_BASE_URL` with the backend's credentialed CORS settings and an explicit frontend origin; its Content Security Policy must also allow the API origin in `connect-src`. Protected shares use `SameSite=Lax` cookies; frontends hosted on a different site should proxy the backend through their own origin.
 
 Owner APIs are `GET/POST /api/folder-shares` and `PUT/DELETE /api/folder-shares/:id`. Public visitors use `/s/:token`, backed by `GET /api/shares/:token` and `POST /api/shares/:token/unlock`. Guest tus requests use `/api/uploads` with an `X-Folder-Share: :token` header, the visitor's unlock cookie when required, and `filename`, `parent_folder_id`, `client_upload_uuid`, and `file_size` (full video bytes) metadata. After transfer, `POST /api/shares/:token/uploads/:upload_id/finalize` queues ingestion and returns a receipt without owner job or media URLs. When `ReturnUploadLink` is enabled, `GET /api/shares/:token/uploads/:upload_id` returns processing status and, when ready, only that upload’s public video URL. Owner creation and updates accept `FolderID`, `Name`, `AllowRead`, `AllowUpload`, `RequireCaptcha`, optional `ExpiresAt`, optional `Password`, and optional `MaxVideoSize`, `MaxFolderSize` (bytes, zero means default), and `ReturnUploadLink` (defaults to true). Omitted upload settings are preserved on update. Omit `Password` to preserve it; use an empty string to remove it.
+
+### Video chapters
+
+A chapter marks a titled point on a video's timeline. Chapters belong to the uploaded media, so every link to the same upload shows the same list, and they follow that media when it is migrated between storage pools and are removed when the media is deleted. Videos without chapters behave exactly as before: the player hides its chapter control and playback and sharing are unchanged.
+
+Owner APIs are:
+
+- `GET /api/file/chapters?LinkID=<link id>` — returns `{"revision", "duration", "chapters": [{"id", "title", "start_time"}]}` in ascending start time.
+- `PUT /api/file/chapters` with `{"LinkID", "revision", "chapters": [{"title", "start_time"}]}` — replaces the complete list.
+- `DELETE /api/file/chapters` with `{"LinkID", "revision"}` (or `?LinkID=…&revision=…`) — clears the list.
+
+`start_time` is a non-negative number of seconds and must not pass the video's duration. Titles must be 1–120 printable characters. A list may contain at most 200 chapters, and two chapters cannot share a start time; submitted chapters are stored in ascending order. Omit `chapters` entirely to clear the list; an empty array is also accepted.
+
+`revision` is a per-upload counter: `0` means no chapters have ever been written, and every successful write advances it. Submit the revision you last read; if another editor changed the list in the meantime, the write is rejected with `409 Conflict` and the response names the current revision, so no edit is silently overwritten. Unauthorised writers receive the same `404` whether the video exists or not. The file detail endpoint (`GET /api/file`) and the player bootstrap include the same list and revision.
 
 ## Screenshots 📸
 

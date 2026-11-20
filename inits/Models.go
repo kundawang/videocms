@@ -81,6 +81,7 @@ func MigrateModels(gormDB *gorm.DB) error {
 		&models.Quality{},
 		&models.Subtitle{},
 		&models.Audio{},
+		&models.Chapter{},
 		&models.UploadSession{},
 		&models.UploadPart{},
 		&models.Webhook{},

@@ -303,6 +303,153 @@
             font-size: 0.78rem;
         }
 
+        /* Chapters */
+        .chapter-panel {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            bottom: 96px;
+            width: min(320px, calc(100% - 32px));
+            display: flex;
+            flex-direction: column;
+            background: rgba(9, 9, 11, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 0.5rem;
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+            z-index: 40;
+            transform: translateX(calc(100% + 24px));
+            transition: transform 0.2s ease;
+        }
+
+        .chapter-panel.open {
+            transform: none;
+        }
+
+        .chapter-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chapter-panel-header h2 {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .chapter-close {
+            border: 0;
+            background: transparent;
+            color: #a1a1aa;
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            padding: 2px 6px;
+        }
+
+        .chapter-close:hover {
+            color: #fff;
+        }
+
+        .chapter-list {
+            margin: 0;
+            padding: 6px;
+            list-style: none;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .chapter-item {
+            width: 100%;
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            padding: 8px 10px;
+            border: 0;
+            border-radius: 0.375rem;
+            background: transparent;
+            color: #e4e4e7;
+            text-align: left;
+            font: inherit;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .chapter-item:hover,
+        .chapter-item:focus-visible {
+            background: rgba(255, 255, 255, 0.08);
+            outline: none;
+        }
+
+        .chapter-item.active {
+            background: rgba(255, 255, 255, 0.14);
+            color: #fff;
+        }
+
+        .chapter-time {
+            flex: 0 0 auto;
+            color: #a1a1aa;
+            font-variant-numeric: tabular-nums;
+            font-size: 0.78rem;
+        }
+
+        .chapter-title {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .chapter-toggle {
+            position: absolute;
+            left: 16px;
+            bottom: 112px;
+            z-index: 41;
+            padding: 8px 12px;
+            border-radius: 0.375rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(9, 9, 11, 0.82);
+            color: #fff;
+            font: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(6px);
+        }
+
+        .chapter-toggle[hidden] {
+            display: none;
+        }
+
+        .chapter-toggle:hover {
+            background: rgba(39, 39, 42, 0.92);
+        }
+
+        @media (max-width: 520px) {
+            .chapter-panel {
+                top: auto;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                width: 100%;
+                max-height: 55%;
+                border-radius: 0.75rem 0.75rem 0 0;
+                transform: translateY(calc(100% + 24px));
+            }
+
+            .chapter-toggle {
+                bottom: 104px;
+            }
+
+            .chapter-panel.open {
+                transform: none;
+            }
+        }
+
         @media (max-width: 520px) {
             .encoding-state {
                 padding: 20px;
@@ -356,6 +503,17 @@
     </div>
 
     {{ if .StreamIsReady }}
+    <button type="button" class="chapter-toggle" id="chapter-toggle" hidden aria-expanded="false" aria-controls="chapter-panel">
+        Chapters
+    </button>
+    <nav class="chapter-panel" id="chapter-panel" aria-label="Video chapters" aria-hidden="true">
+        <div class="chapter-panel-header">
+            <h2>Chapters</h2>
+            <button type="button" class="chapter-close" id="chapter-close" aria-label="Close chapters">&times;</button>
+        </div>
+        <ol class="chapter-list" id="chapter-list"></ol>
+    </nav>
+
     <!-- Continue Watching Popup -->
     <div id="continue-popup" class="continue-popup">
         <h3 id="continue-text">Resume playback?</h3>
@@ -386,6 +544,7 @@
         let Audios = JSON.parse(decodeURI("{{.Audios}}")) || [];
         let Webhooks = JSON.parse(decodeURI("{{.Webhooks}}")) || [];
         let PlayerStatus = JSON.parse(decodeURI("{{.PlayerStatus}}")) || {};
+        let Chapters = JSON.parse(decodeURI("{{.Chapters}}")) || { revision: 0, chapters: [] };
 
         function clampProgress(value) {
             const progress = Number(value);
@@ -506,11 +665,98 @@
             );
         }
 
+        // --- Chapters ---
+        function formatChapterTime(seconds) {
+            const total = Math.max(0, Math.floor(Number(seconds) || 0));
+            const minutes = Math.floor(total / 60);
+            const remainder = String(total % 60).padStart(2, "0");
+            return `${minutes}:${remainder}`;
+        }
+
+        function seekToChapter(chapter) {
+            if (!player || !chapter) return;
+            player.currentTime = chapter.start_time;
+            // Block browsers without a media engine from rejecting the promise.
+            const playback = player.play();
+            if (playback && typeof playback.catch === "function") playback.catch(() => {});
+            highlightChapter(chapter);
+        }
+
+        function highlightChapter(chapter) {
+            const items = document.querySelectorAll("#chapter-list .chapter-item");
+            items.forEach((item) => {
+                const active = String(item.dataset.chapterId) === String(chapter.id);
+                item.classList.toggle("active", active);
+                item.setAttribute("aria-current", active ? "true" : "false");
+            });
+        }
+
+        function currentChapter() {
+            if (!player || !Array.isArray(Chapters.chapters)) return null;
+            const time = Number(player.currentTime);
+            if (!Number.isFinite(time)) return null;
+            let active = null;
+            for (const chapter of Chapters.chapters) {
+                if (time >= chapter.start_time) active = chapter;
+            }
+            return active;
+        }
+
+        function toggleChapterPanel(open) {
+            const panel = document.getElementById("chapter-panel");
+            const toggle = document.getElementById("chapter-toggle");
+            if (!panel || !toggle) return;
+            const shouldOpen = typeof open === "boolean" ? open : !panel.classList.contains("open");
+            panel.classList.toggle("open", shouldOpen);
+            panel.setAttribute("aria-hidden", shouldOpen ? "false" : "true");
+            toggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+        }
+
+        function setupChapters() {
+            const list = document.getElementById("chapter-list");
+            const toggle = document.getElementById("chapter-toggle");
+            const close = document.getElementById("chapter-close");
+            if (!list || !toggle || !close) return;
+            const chapters = Array.isArray(Chapters.chapters) ? Chapters.chapters : [];
+            list.innerHTML = "";
+            if (chapters.length === 0) {
+                toggle.hidden = true;
+                return;
+            }
+            chapters.forEach((chapter) => {
+                const row = document.createElement("li");
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "chapter-item";
+                button.dataset.chapterId = String(chapter.id);
+
+                const time = document.createElement("span");
+                time.className = "chapter-time";
+                time.textContent = formatChapterTime(chapter.start_time);
+
+                const title = document.createElement("span");
+                title.className = "chapter-title";
+                title.textContent = chapter.title;
+
+                button.append(time, title);
+                button.addEventListener("click", () => seekToChapter(chapter));
+                row.append(button);
+                list.append(row);
+            });
+            toggle.hidden = false;
+            toggle.addEventListener("click", () => toggleChapterPanel());
+            close.addEventListener("click", () => toggleChapterPanel(false));
+            player.addEventListener("timeupdate", () => highlightChapter(currentChapter()));
+        }
+
         // --- Setup Source ---
         let streamUrl = `${FOLDER}/${UUID}/stream/multi/master.m3u8`;
 
         const player = document.querySelector('media-player');
         player.src = streamUrl;
+
+        // --- Setup Chapters ---
+        setupChapters();
 
         // --- Setup Subtitles ---
         const provider = document.querySelector('media-provider');

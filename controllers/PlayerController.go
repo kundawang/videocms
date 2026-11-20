@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 const (
@@ -154,11 +155,19 @@ func (h *Handlers) PlayerController(c echo.Context) error {
 		})
 	}
 
+	chapterRows, err := loadPlayerChapters(h.Deps.DB, dbLink.FileID)
+	if err != nil {
+		log.Printf("Failed to query chapters of file %d: %v", dbLink.FileID, err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	chapters := models.ChapterList{Revision: dbLink.File.ChaptersRevision, Chapters: models.ChapterItems(chapterRows)}
+
 	rawQuality, _ := json.Marshal(jsonQualitys)
 	rawSubtitles, _ := json.Marshal(jsonSubtitles)
 	rawAudios, _ := json.Marshal(jsonAudios)
 	rawWebhooks, _ := json.Marshal(jsonWebhooks)
 	rawPlayerStatus, _ := json.Marshal(playerStatus)
+	rawChapters, _ := json.Marshal(chapters)
 
 	var downloadsEnabled bool
 	if h.Config().DownloadEnabled != nil {
@@ -200,6 +209,7 @@ func (h *Handlers) PlayerController(c echo.Context) error {
 		"Audios":                       string(rawAudios),
 		"AudioUUID":                    firstAudio,
 		"Webhooks":                     string(rawWebhooks),
+		"Chapters":                     string(rawChapters),
 		"StreamIsReady":                playerStatus.Ready,
 		"PlayerStatus":                 string(rawPlayerStatus),
 		"UUID":                         requestValidation.UUID,
@@ -266,6 +276,20 @@ func (h *Handlers) loadPlayerLink(uuid string) (*models.Link, error) {
 	}
 
 	return &dbLink, nil
+}
+
+// loadPlayerChapters reads only the fields the player renders. The revision
+// shown to the editor is the media row's counter, which the link preload
+// already carries, so chapters cost one extra query only.
+func loadPlayerChapters(db *gorm.DB, fileID uint) ([]models.Chapter, error) {
+	var chapters []models.Chapter
+	if err := db.Select("id", "title", "start_time", "file_id").
+		Where("file_id = ?", fileID).
+		Order("start_time ASC, id ASC").
+		Find(&chapters).Error; err != nil {
+		return nil, err
+	}
+	return chapters, nil
 }
 
 func (h *Handlers) playerCaptchaAllowed(c echo.Context) bool {

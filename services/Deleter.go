@@ -178,6 +178,11 @@ func (w *WorkerGroup) runDeleter() error {
 			if err := tx.Unscoped().Where("file_id = ?", todo.ID).Delete(&models.Quality{}).Error; err != nil {
 				return err
 			}
+			// Chapters belong to the media record and are removed with it so no
+			// orphaned timeline survives the video.
+			if err := tx.Unscoped().Where("file_id = ?", todo.ID).Delete(&models.Chapter{}).Error; err != nil {
+				return err
+			}
 			return tx.Unscoped().Delete(&todo).Error
 		}); err != nil {
 			log.Printf("Failed to delete file %d from database: %v", todo.ID, err)

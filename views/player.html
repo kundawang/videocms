@@ -163,6 +163,88 @@
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
         }
 
+
+        /* Chapter list (settings-style overlay) */
+        .chapterListContainer {
+            position: absolute;
+            right: 1.5rem;
+            bottom: 5rem;
+            z-index: 1001;
+            background-color: hsl(var(--popover) / 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            width: 300px;
+            max-height: calc(100vh - 150px);
+            display: flex;
+            flex-direction: column;
+            padding: 0.5rem;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+            color: hsl(var(--popover-foreground));
+            font-size: 0.875rem;
+            overflow: hidden;
+        }
+
+        .chapterListContainer.hidden {
+            display: none;
+        }
+
+        .chapterListItem {
+            display: flex;
+            align-items: baseline;
+            gap: 0.6rem;
+            padding: 0.6rem 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+            color: hsl(var(--foreground));
+            transition: background 0.15s ease;
+        }
+
+        .chapterListItem:hover {
+            background-color: hsl(var(--accent));
+            color: hsl(var(--accent-foreground));
+        }
+
+        .chapterListItem.active {
+            background-color: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+        }
+
+        .chapterListItem .chapterTime {
+            flex: 0 0 auto;
+            font-variant-numeric: tabular-nums;
+            opacity: 0.75;
+            font-size: 0.78rem;
+        }
+
+        .chapterListItem .chapterTitle {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .chapterToggleButton {
+            position: absolute;
+            left: 1.5rem;
+            bottom: 5rem;
+            z-index: 1001;
+            padding: 0.5rem 0.9rem;
+            border-radius: 4px;
+            border: 1px solid hsl(var(--border));
+            background: hsl(var(--popover) / 0.9);
+            color: hsl(var(--popover-foreground));
+            font: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .chapterToggleButton:hover {
+            background-color: hsl(var(--accent));
+            color: hsl(var(--accent-foreground));
+        }
+
         /* Settings Menu Overlay - Vidstack/Shadcn style */
         .settingOverlayContainer {
             position: absolute;
@@ -520,6 +602,7 @@
         const ICON_CHEVRON_RIGHT = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
         const ICON_CHECK = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
         const ICON_BACK = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>`;
+        const ICON_CHAPTERS = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h9"/></svg>`;
         const ICON_SETTINGS = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`;
 
         let Qualitys = JSON.parse(decodeURI("{{.Qualitys}}"));
@@ -532,6 +615,8 @@
         if (Webhooks == null) Webhooks = [];
         let PlayerStatus = JSON.parse(decodeURI("{{.PlayerStatus}}"));
         if (PlayerStatus == null) PlayerStatus = {};
+        let Chapters = JSON.parse(decodeURI("{{.Chapters}}"));
+        if (Chapters == null) Chapters = { revision: 0, chapters: [] };
         const UUID = "{{.UUID}}";
 
         const TITLE = "{{.Title}}";
@@ -665,6 +750,98 @@
             );
             settingsList[menuItemIndex].items[subMenuItemIndex].active =
                 isActive;
+        }
+
+                // --- Chapters ---
+        function formatChapterTime(seconds) {
+            const total = Math.max(0, Math.floor(Number(seconds) || 0));
+            const minutes = Math.floor(total / 60);
+            const remainder = String(total % 60).padStart(2, "0");
+            return `${minutes}:${remainder}`;
+        }
+
+        function chapterList() {
+            return Array.isArray(Chapters.chapters) ? Chapters.chapters : [];
+        }
+
+        function seekToChapter(chapter) {
+            if (!active_video_el || !chapter) return;
+            active_video_el.currentTime = chapter.start_time;
+            const playback = active_video_el.play();
+            if (playback && typeof playback.catch === "function") playback.catch(() => {});
+            updateActiveChapter();
+        }
+
+        function currentChapter() {
+            if (!active_video_el) return null;
+            const time = Number(active_video_el.currentTime);
+            if (!Number.isFinite(time)) return null;
+            let active = null;
+            for (const chapter of chapterList()) {
+                if (time >= chapter.start_time) active = chapter;
+            }
+            return active;
+        }
+
+        function updateActiveChapter() {
+            const active = currentChapter();
+            document.querySelectorAll(".chapterListItem").forEach((item) => {
+                const isActive = active != null && item.dataset.chapterId === String(active.id);
+                item.classList.toggle("active", isActive);
+                item.setAttribute("aria-current", isActive ? "true" : "false");
+            });
+        }
+
+        function renderChapterList() {
+            const old = document.querySelector(".chapterListContainer");
+            if (old) old.remove();
+            const chapters = chapterList();
+            if (chapters.length === 0) return;
+
+            const container = document.createElement("div");
+            container.classList.add("chapterListContainer");
+            container.classList.add("hidden");
+            container.addEventListener("click", (event) => event.stopPropagation());
+
+            const header = document.createElement("div");
+            header.classList.add("settingsHeader");
+            header.innerText = "Chapters";
+            container.append(header);
+
+            const content = document.createElement("div");
+            content.classList.add("settingsContent");
+            chapters.forEach((chapter) => {
+                const item = document.createElement("div");
+                item.classList.add("chapterListItem");
+                item.dataset.chapterId = String(chapter.id);
+                item.setAttribute("role", "button");
+                item.setAttribute("tabindex", "0");
+
+                const time = document.createElement("span");
+                time.classList.add("chapterTime");
+                time.innerText = formatChapterTime(chapter.start_time);
+
+                const title = document.createElement("span");
+                title.classList.add("chapterTitle");
+                title.innerText = chapter.title;
+
+                item.append(time, title);
+                item.onclick = () => seekToChapter(chapter);
+                item.onkeydown = (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        seekToChapter(chapter);
+                    }
+                };
+                content.append(item);
+            });
+            container.append(content);
+            videoPlayerContainer.append(container);
+        }
+
+        function toggleChapterList() {
+            const list = document.querySelector(".chapterListContainer");
+            if (list) list.classList.toggle("hidden");
         }
 
         const videoPlayerContainer = document.querySelector(".videoPlayer");
@@ -814,6 +991,10 @@
             createVideoPlayer();
             createPlyr();
             renderCustomSettingOverlay();
+            renderChapterList();
+            if (active_video_el) {
+                active_video_el.addEventListener("timeupdate", updateActiveChapter);
+            }
             setDefaultData();
             renderSubtitle(active_subtitle_index);
             trackAssPosition();
@@ -828,6 +1009,13 @@
                 if (container && !container.classList.contains("hidden")) {
                     if (!container.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
                         container.classList.add("hidden");
+                    }
+                }
+                const chapters = document.querySelector(".chapterListContainer");
+                const chaptersBtn = document.querySelector("#plyr-chapters-btn");
+                if (chapters && !chapters.classList.contains("hidden")) {
+                    if (!chapters.contains(e.target) && !(chaptersBtn && chaptersBtn.contains(e.target))) {
+                        chapters.classList.add("hidden");
                     }
                 }
             });
@@ -1087,6 +1275,18 @@
                 e.stopPropagation();
                 toggleCustomSettingOverlay();
             });
+            if (chapterList().length > 0) {
+                const plyr_chapters = addButtonToPlyr(
+                    ".plyr__volume",
+                    "plyr-chapters-btn",
+                    "Chapters",
+                    ICON_CHAPTERS
+                );
+                plyr_chapters.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    toggleChapterList();
+                });
+            }
         }
 
         let renderCustomSettingOverlayIndex = -1;

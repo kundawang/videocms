@@ -14,6 +14,7 @@ type File struct {
 	StorageID           string `gorm:"size:64;index" json:"-"`
 	StoragePoolID       *uint  `gorm:"index" json:"-"`
 	StorageCacheVersion uint64 `json:"-"`
+	ChaptersRevision    uint64 `gorm:"not null;default:0" json:"-"`
 	StorageState        string `gorm:"size:16;index;default:available"`
 	SourceKey           string `gorm:"size:1024" json:"-"`
 	Path                string `gorm:"size:120;" json:"-"`
@@ -23,6 +24,7 @@ type File struct {
 	Qualitys            []Quality  `json:"-"`
 	Subtitles           []Subtitle `json:"-"`
 	Audios              []Audio    `json:"-"`
+	Chapters            []Chapter  `json:"-"`
 	Links               []Link     `json:"-"`
 }
 

@@ -51,6 +51,7 @@ type GetFileResp struct {
 	Subtitles       []GetFileRespSub
 	Audios          []GetFileRespAudio
 	Tags            []GetFileRespTag
+	Chapters        models.ChapterList
 }
 
 func (s *Service) GetFile(LinkID uint, userID uint, isAdmin bool) (status int, fileData *GetFileResp, err error) {
@@ -121,6 +122,11 @@ func (s *Service) GetFile(LinkID uint, userID uint, isAdmin bool) (status int, f
 		})
 	}
 
+	chapters, err := loadChapters(s.Deps.DB, link.FileID)
+	if err != nil {
+		return http.StatusInternalServerError, nil, echo.ErrInternalServerError
+	}
+
 	response := GetFileResp{
 		CreatedAt:       *link.CreatedAt,
 		UpdatedAt:       *link.UpdatedAt,
@@ -137,6 +143,7 @@ func (s *Service) GetFile(LinkID uint, userID uint, isAdmin bool) (status int, f
 		Subtitles:       Subtitles,
 		Audios:          Audios,
 		Tags:            Tags,
+		Chapters:        models.ChapterList{Revision: link.File.ChaptersRevision, Chapters: models.ChapterItems(chapters)},
 	}
 
 	return http.StatusOK, &response, nil

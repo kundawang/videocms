@@ -76,7 +76,7 @@ func TestDeleterRemovesAllMigrationCopiesAndReleasesReservations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&models.File{}, &models.Link{}, &models.Quality{}, &models.Audio{}, &models.Subtitle{}, &models.StorageMigration{}, &models.StorageMigrationAccount{}, &models.StorageMigrationItem{}, &models.StorageMigrationObject{}); err != nil {
+	if err := db.AutoMigrate(&models.File{}, &models.Link{}, &models.Quality{}, &models.Audio{}, &models.Subtitle{}, &models.Chapter{}, &models.StorageMigration{}, &models.StorageMigrationAccount{}, &models.StorageMigrationItem{}, &models.StorageMigrationObject{}); err != nil {
 		t.Fatal(err)
 	}
 	source, _ := storage.NewLocalStore(t.TempDir())
@@ -189,5 +189,65 @@ func TestDeleterKeepsFileWithActiveLink(t *testing.T) {
 	}
 	if err := db.First(&models.File{}, file.ID).Error; err != nil {
 		t.Fatalf("referenced file was deleted: %v", err)
+	}
+}
+
+func TestDeleterRemovesChaptersWithUnreferencedMedia(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&models.File{}, &models.Link{}, &models.Quality{}, &models.Audio{}, &models.Subtitle{}, &models.Chapter{}, &models.StorageMigrationItem{}); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := storage.NewLocalStore(t.TempDir())
+	storageService, _ := storage.NewService("source", storage.LegacyMediaLayout{}, map[string]storage.Store{"source": store})
+	t.Cleanup(func() { _ = storageService.Close() })
+	file := models.File{UUID: "550e8400-e29b-41d4-a716-446655440313", StorageID: "source", StorageState: models.FileStorageAvailable}
+	if err := db.Create(&file).Error; err != nil {
+		t.Fatal(err)
+	}
+	link := models.Link{UUID: "deleted-chapter-link", Name: "deleted", FileID: file.ID}
+	if err := db.Create(&link).Error; err != nil {
+		t.Fatal(err)
+	}
+	chapters := []models.Chapter{
+		{FileID: file.ID, Title: "Intro", StartTime: 0},
+		{FileID: file.ID, Title: "Middle", StartTime: 30},
+	}
+	if err := db.Create(&chapters).Error; err != nil {
+		t.Fatal(err)
+	}
+	// A second, still-referenced media keeps its chapters.
+	liveFile := models.File{UUID: "550e8400-e29b-41d4-a716-446655440314", StorageID: "source", StorageState: models.FileStorageAvailable}
+	if err := db.Create(&liveFile).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.Link{UUID: "live-chapter-link", Name: "live", FileID: liveFile.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.Chapter{FileID: liveFile.ID, Title: "Keep", StartTime: 0}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Delete(&link).Error; err != nil {
+		t.Fatal(err)
+	}
+	worker := NewWorkerGroup(&app.Deps{DB: db, Storage: storageService}, nil)
+	if err := worker.runDeleter(); err != nil {
+		t.Fatal(err)
+	}
+	var removed int64
+	if err := db.Model(&models.Chapter{}).Where("file_id = ?", file.ID).Count(&removed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if removed != 0 {
+		t.Fatalf("%d chapters outlived their media", removed)
+	}
+	var kept int64
+	if err := db.Model(&models.Chapter{}).Where("file_id = ?", liveFile.ID).Count(&kept).Error; err != nil {
+		t.Fatal(err)
+	}
+	if kept != 1 {
+		t.Fatalf("referenced media lost chapters: %d", kept)
 	}
 }

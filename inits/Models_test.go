@@ -310,3 +310,55 @@ func TestMigrateModelsBackfillsNullStorageCacheVersions(t *testing.T) {
 		t.Fatalf("null storage cache versions = %d, want 0", nullVersions)
 	}
 }
+
+// TestMigrateModelsAddsChaptersWithoutTouchingExistingVideos upgrades a
+// database created before chapters existed. Existing files and links must keep
+// their values and simply report an empty chapter list.
+func TestMigrateModelsAddsChaptersWithoutTouchingExistingVideos(t *testing.T) {
+	db, err := gorm.Open(
+		sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"),
+		&gorm.Config{},
+	)
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	if err := db.AutoMigrate(&models.File{}, &models.Link{}); err != nil {
+		t.Fatalf("migrate pre-chapter schema: %v", err)
+	}
+	file := models.File{UUID: "550e8400-e29b-41d4-a716-446655440501", StorageID: models.StorageMountLocalUUID, Duration: 3600, StorageState: models.FileStorageAvailable}
+	if err := db.Create(&file).Error; err != nil {
+		t.Fatalf("create pre-chapter file: %v", err)
+	}
+	link := models.Link{UUID: "550e8400-e29b-41d4-a716-446655440502", Name: "Legacy lecture", FileID: file.ID}
+	if err := db.Create(&link).Error; err != nil {
+		t.Fatalf("create pre-chapter link: %v", err)
+	}
+	if db.Migrator().HasTable(&models.Chapter{}) {
+		t.Fatal("pre-chapter schema unexpectedly already has chapters")
+	}
+
+	if err := MigrateModels(db); err != nil {
+		t.Fatalf("MigrateModels() error = %v", err)
+	}
+	if !db.Migrator().HasTable(&models.Chapter{}) {
+		t.Fatal("MigrateModels() did not create the chapters table")
+	}
+	var upgradedFile models.File
+	if err := db.First(&upgradedFile, file.ID).Error; err != nil {
+		t.Fatalf("load upgraded file: %v", err)
+	}
+	if upgradedFile.UUID != file.UUID || upgradedFile.Duration != 3600 || upgradedFile.StorageID != file.StorageID {
+		t.Fatalf("upgrade changed file: %#v", upgradedFile)
+	}
+	var upgradedLink models.Link
+	if err := db.First(&upgradedLink, link.ID).Error; err != nil {
+		t.Fatalf("load upgraded link: %v", err)
+	}
+	if upgradedLink.Name != "Legacy lecture" || upgradedLink.FileID != file.ID || upgradedLink.UUID != link.UUID {
+		t.Fatalf("upgrade changed link: %#v", upgradedLink)
+	}
+	var chapters int64
+	if err := db.Model(&models.Chapter{}).Where("file_id = ?", file.ID).Count(&chapters).Error; err != nil || chapters != 0 {
+		t.Fatalf("legacy video gained chapters: %d %v", chapters, err)
+	}
+}
